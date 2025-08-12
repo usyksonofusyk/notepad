@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Shareable Notes</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="theme-color" content="#0ea5e9" />
+  <link rel="manifest" href="data:application/manifest+json,{
+    &quot;name&quot;: &quot;Shareable Notes&quot;,
+    &quot;short_name&quot;: &quot;Notes&quot;,
+    &quot;display&quot;: &quot;standalone&quot;,
+    &quot;background_color&quot;: &quot;#0ea5e9&quot;,
+    &quot;theme_color&quot;: &quot;#0ea5e9&quot;,
+    &quot;icons&quot;: []
+  }">
+  <style>
+    html, body, #app { height: 100%; }
+    textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body class="h-full bg-slate-50 text-slate-900">
+  <div id="app" class="h-full">
+    <header class="sticky top-0 z-10 bg-white border-b border-slate-200">
+      <div class="max-w-6xl mx-auto px-3 py-2 flex items-center gap-2">
+        <h1 class="text-xl font-semibold tracking-tight mr-auto">📝 Shareable Notes</h1>
+        <div class="flex items-center gap-2">
+          <button id="newNoteBtn" class="px-3 py-1.5 rounded-xl bg-sky-500 text-white hover:bg-sky-600 shadow">New</button>
+          <button id="renameBtn" class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300">Rename</button>
+          <button id="deleteBtn" class="px-3 py-1.5 rounded-xl bg-rose-500 text-white hover:bg-rose-600">Delete</button>
+          <div class="h-6 w-px bg-slate-300 mx-1"></div>
+          <button id="exportBtn" class="px-3 py-1.5 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600">Export</button>
+          <label class="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 cursor-pointer">
+            Import<input id="importInput" type="file" accept="application/json" class="hidden" />
+          </label>
+          <div class="h-6 w-px bg-slate-300 mx-1"></div>
+          <button id="shareLinkBtn" class="px-3 py-1.5 rounded-xl bg-violet-500 text-white hover:bg-violet-600">Copy Link</button>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto h-[calc(100%-56px)] px-3 grid grid-cols-12 gap-3 py-3">
+      <!-- Sidebar -->
+      <aside class="col-span-12 md:col-span-4 lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col min-h-0">
+        <div class="p-2 border-b border-slate-100">
+          <input id="search" type="search" placeholder="Search notes..." class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" />
+        </div>
+        <ul id="noteList" class="overflow-auto divide-y divide-slate-100"></ul>
+      </aside>
+
+      <!-- Editor -->
+      <section class="col-span-12 md:col-span-8 lg:col-span-9 flex flex-col min-h-0 gap-3">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-2">
+          <input id="title" class="flex-1 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" placeholder="Untitled note" />
+          <span id="status" class="text-sm text-slate-500">Saved</span>
+        </div>
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm flex-1 flex min-h-0">
+          <textarea id="content" class="w-full p-3 rounded-2xl outline-none resize-none" placeholder="Start typing... (autosaves)"></textarea>
+        </div>
+
+        <!-- Optional Cloud Sync (Supabase) -->
+        <details class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3">
+          <summary class="cursor-pointer select-none font-medium">Optional Cloud Sync (free) — Supabase</summary>
+          <div class="grid md:grid-cols-2 gap-3 mt-3">
+            <div class="space-y-2">
+              <label class="text-sm text-slate-600">Project URL</label>
+              <input id="sbUrl" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" placeholder="https://YOUR-PROJECT.supabase.co" />
+              <label class="text-sm text-slate-600">Anon Key</label>
+              <input id="sbKey" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" placeholder="paste anon public key" />
+              <label class="text-sm text-slate-600">Sync Set ID (any string)</label>
+              <input id="sbDoc" class="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200" placeholder="e.g., work-notes" />
+            </div>
+            <div class="space-y-2">
+              <p class="text-sm text-slate-600">Use this if you want automatic sharing between computers. Create a free Supabase project, make a table named <code>notes</code> with columns:<br><code>id:text (PK)</code>, <code>data:jsonb</code>, <code>updated_at:timestamp</code>. Enable Row Level Security and add a policy to allow <em>insert/update/select</em> for anon. Paste your URL and anon key above. (You can replace anon policy with authenticated later.)</p>
+              <div class="flex gap-2">
+                <button id="pullBtn" class="px-3 py-2 rounded-xl bg-slate-200 hover:bg-slate-300">Pull from Cloud</button>
+                <button id="pushBtn" class="px-3 py-2 rounded-xl bg-emerald-500 text-white hover:bg-emerald-600">Push to Cloud</button>
+                <label class="flex items-center gap-2 text-sm"><input id="autoSync" type="checkbox" class="accent-sky-600" /> Auto-sync</label>
+              </div>
+              <div id="syncMsg" class="text-xs text-slate-500"></div>
+            </div>
+          </div>
+        </details>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    // --- Utilities ---
+    const $ = (sel) => document.querySelector(sel);
+    const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+    const LS_KEY = 'shareable-notes.v1';
+
+    function loadAll() {
+      try { return JSON.parse(localStorage.getItem(LS_KEY)) || { notes: {}, order: [] }; }
+      catch { return { notes: {}, order: [] }; }
+    }
+    function saveAll(db) { localStorage.setItem(LS_KEY, JSON.stringify(db)); }
+
+    function createNote(title = 'Untitled', content = '') {
+      const id = uid();
+      return { id, title, content, updatedAt: new Date().toISOString() };
+    }
+
+    function setStatus(msg, transient=true) {
+      const el = $('#status');
+      el.textContent = msg;
+      if (transient) {
+        clearTimeout(setStatus._t);
+        setStatus._t = setTimeout(() => el.textContent = 'Saved', 1200);
+      }
+    }
+
+    // --- State ---
+    let db = loadAll();
+    let currentId = null;
+    let autosaveTimer = null;
+
+    // Import from URL hash (share link)
+    try {
+      if (location.hash.startsWith('#note=')) {
+        const raw = decodeURIComponent(location.hash.slice(6));
+        const shared = JSON.parse(atob(raw));
+        if (shared && shared.title && typeof shared.content === 'string') {
+          const note = createNote(shared.title, shared.content);
+          db.notes[note.id] = note;
+          db.order.unshift(note.id);
+          saveAll(db);
+          location.hash = '';
+          alert('Imported note from link.');
+        }
+      }
+    } catch (e) { console.warn('share-link import failed', e); }
+
+    // --- Rendering ---
+    function renderList(filter='') {
+      const list = $('#noteList');
+      list.innerHTML = '';
+      const ids = db.order.filter(id => {
+        const n = db.notes[id];
+        const q = filter.toLowerCase();
+        return !q || n.title.toLowerCase().includes(q) || n.content.toLowerCase().includes(q);
+      });
+      if (!ids.length) {
+        list.innerHTML = '<li class="p-4 text-slate-500">No notes yet. Click "New" to start.</li>';
+        return;
+      }
+      ids.forEach(id => {
+        const n = db.notes[id];
+        const li = document.createElement('li');
+        li.className = 'p-3 hover:bg-slate-50 cursor-pointer';
+        li.innerHTML = `
+          <div class="font-medium truncate">${escapeHtml(n.title || 'Untitled')}</div>
+          <div class="text-xs text-slate-500 truncate">${escapeHtml(n.content).slice(0, 120)}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${new Date(n.updatedAt).toLocaleString()}</div>
+        `;
+        li.addEventListener('click', () => openNote(id));
+        list.appendChild(li);
+      });
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[s]));
+    }
+
+    function openNote(id) {
+      const note = db.notes[id];
+      if (!note) return;
+      currentId = id;
+      $('#title').value = note.title;
+      $('#content').value = note.content;
+      setStatus('Opened');
+      // move to top (most recent)
+      db.order = [id, ...db.order.filter(x => x !== id)];
+      saveAll(db);
+      renderList($('#search').value);
+    }
+
+    function ensureNoteOpen() {
+      if (!currentId) {
+        if (!db.order.length) {
+          const n = createNote();
+          db.notes[n.id] = n;
+          db.order.unshift(n.id);
+          saveAll(db);
+        }
+        openNote(db.order[0]);
+      }
+    }
+
+    // --- Events ---
+    $('#newNoteBtn').addEventListener('click', () => {
+      const n = createNote();
+      db.notes[n.id] = n;
+      db.order.unshift(n.id);
+      saveAll(db);
+      renderList($('#search').value);
+      openNote(n.id);
+    });
+
+    $('#renameBtn').addEventListener('click', () => {
+      ensureNoteOpen();
+      const t = prompt('Rename note to:', $('#title').value || 'Untitled');
+      if (t == null) return;
+      $('#title').value = t;
+      touchAndSave();
+    });
+
+    $('#deleteBtn').addEventListener('click', () => {
+      ensureNoteOpen();
+      if (!confirm('Delete this note?')) return;
+      delete db.notes[currentId];
+      db.order = db.order.filter(id => id !== currentId);
+      saveAll(db);
+      currentId = null;
+      renderList($('#search').value);
+      ensureNoteOpen();
+    });
+
+    $('#exportBtn').addEventListener('click', () => {
+      const blob = new Blob([JSON.stringify(db, null, 2)], {type: 'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `notes-${new Date().toISOString().slice(0,19)}.json`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    });
+
+    $('#importInput').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const text = await file.text();
+      try {
+        const imported = JSON.parse(text);
+        if (!imported || !imported.notes) throw new Error('Invalid file');
+        // merge
+        for (const [id, note] of Object.entries(imported.notes)) {
+          if (!db.notes[id] || new Date(note.updatedAt) > new Date(db.notes[id].updatedAt)) {
+            db.notes[id] = note;
+            if (!db.order.includes(id)) db.order.unshift(id);
+          }
+        }
+        saveAll(db);
+        renderList($('#search').value);
+        alert('Imported notes.');
+      } catch (err) { alert('Import failed: ' + err.message); }
+      e.target.value = '';
+    });
+
+    $('#shareLinkBtn').addEventListener('click', async () => {
+      ensureNoteOpen();
+      const note = db.notes[currentId];
+      const payload = btoa(encodeURIComponent(JSON.stringify({title: note.title, content: note.content})));
+      const link = location.origin + location.pathname + '#note=' + payload;
+      await navigator.clipboard.writeText(link);
+      alert('Shareable link copied. Send it to yourself and open it on another computer to import the note.');
+    });
+
+    $('#search').addEventListener('input', (e) => renderList(e.target.value));
+
+    $('#title').addEventListener('input', scheduleAutosave);
+    $('#content').addEventListener('input', scheduleAutosave);
+
+    function scheduleAutosave() {
+      setStatus('Editing…', false);
+      clearTimeout(autosaveTimer);
+      autosaveTimer = setTimeout(touchAndSave, 500);
+    }
+
+    function touchAndSave() {
+      ensureNoteOpen();
+      const n = db.notes[currentId];
+      n.title = $('#title').value.trim() || 'Untitled';
+      n.content = $('#content').value;
+      n.updatedAt = new Date().toISOString();
+      saveAll(db);
+      renderList($('#search').value);
+      setStatus('Saved');
+      if ($('#autoSync').checked) pushToCloud().catch(()=>{});
+    }
+
+    // --- Cloud Sync (Supabase REST) ---
+    async function pushToCloud() {
+      const {url, key, doc} = getSbConfig();
+      if (!url || !key || !doc) { noteSyncMsg('Missing Supabase settings.'); return; }
+      noteSyncMsg('Pushing…');
+      const res = await fetch(`${url}/rest/v1/notes`, {
+        method: 'POST',
+        headers: {
+          'apikey': key,
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
+        body: JSON.stringify({ id: doc, data: db, updated_at: new Date().toISOString() })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      noteSyncMsg('Pushed ✓');
+    }
+
+    async function pullFromCloud() {
+      const {url, key, doc} = getSbConfig();
+      if (!url || !key || !doc) { noteSyncMsg('Missing Supabase settings.'); return; }
+      noteSyncMsg('Pulling…');
+      const res = await fetch(`${url}/rest/v1/notes?id=eq.${encodeURIComponent(doc)}`, {
+        headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const rows = await res.json();
+      if (!rows.length) { noteSyncMsg('No cloud data for this ID yet.'); return; }
+      const remote = rows[0].data;
+      // Merge with local: prefer newer updatedAt per note
+      for (const [id, note] of Object.entries(remote.notes || {})) {
+        if (!db.notes[id] || new Date(note.updatedAt) > new Date(db.notes[id].updatedAt)) {
+          db.notes[id] = note;
+          if (!db.order.includes(id)) db.order.unshift(id);
+        }
+      }
+      // Also keep any local-only notes
+      saveAll(db);
+      renderList($('#search').value);
+      if (db.order[0]) openNote(db.order[0]);
+      noteSyncMsg('Pulled ✓');
+    }
+
+    function getSbConfig() {
+      const url = $('#sbUrl').value.trim();
+      const key = $('#sbKey').value.trim();
+      const doc = $('#sbDoc').value.trim();
+      return {url, key, doc};
+    }
+    function noteSyncMsg(m) { $('#syncMsg').textContent = m; }
+
+    $('#pushBtn').addEventListener('click', async () => {
+      try { await pushToCloud(); } catch (e) { noteSyncMsg('Push failed: ' + e.message); }
+    });
+    $('#pullBtn').addEventListener('click', async () => {
+      try { await pullFromCloud(); } catch (e) { noteSyncMsg('Pull failed: ' + e.message); }
+    });
+
+    // Initial load
+    renderList();
+    ensureNoteOpen();
+
+    // Basic PWA offline capability (service worker caches this single file)
+    if ('serviceWorker' in navigator) {
+      const swSrc = URL.createObjectURL(new Blob([`
+        const CACHE = 'notes-cache-v1';
+        self.addEventListener('install', (e) => {
+          e.waitUntil(caches.open(CACHE).then(c => c.addAll(['./'])));
+        });
+        self.addEventListener('fetch', (e) => {
+          e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+        });
+      `], {type:'text/javascript'}));
+      navigator.serviceWorker.register(swSrc);
+    }
+  </script>
+</body>
+</html>
